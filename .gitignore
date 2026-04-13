@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+.pnpmrc.json
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Vite config compiled outputs (generated when vite runs in a TS project)
+packages/web/vite.config.d.ts
+packages/web/vite.config.d.ts.map
+packages/web/vite.config.js
+packages/web/vite.config.js.map
+
+# Third-party skill framework (cloned externally, not part of this repo)
+.claude/skills/superpowers/

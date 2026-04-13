@@ -1,0 +1,184 @@
+// AIPM 全局样式入口
+// 所有 view 可以直接用这里定义的 CSS variables 和工具类
+
+@use './breakpoints' as *;
+
+// ============================================================
+// CSS Variables (global design tokens)
+// ============================================================
+
+:root {
+  // ============================================================
+  // Spacing (8-point grid)
+  // ============================================================
+  --aipm-spacing-xs: 4px;
+  --aipm-spacing-sm: 8px;
+  --aipm-spacing-md: 16px;
+  --aipm-spacing-lg: 24px;
+  --aipm-spacing-xl: 32px;
+  --aipm-spacing-2xl: 48px;
+
+  // ============================================================
+  // Radius
+  // ============================================================
+  --aipm-radius-sm: 4px;
+  --aipm-radius-md: 8px;
+  --aipm-radius-lg: 12px;
+  --aipm-radius-pill: 100px;
+
+  // ============================================================
+  // Shadows
+  // ============================================================
+  --aipm-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --aipm-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --aipm-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  // ============================================================
+  // Typography — font size
+  // ============================================================
+  --aipm-font-size-xs: 11px;   // micro, timestamp
+  --aipm-font-size-sm: 12px;   // caption, meta
+  --aipm-font-size-base: 13px; // body text
+  --aipm-font-size-md: 14px;   // form labels, buttons
+  --aipm-font-size-lg: 15px;   // card titles
+  --aipm-font-size-xl: 16px;   // section headings
+  --aipm-font-size-2xl: 20px;  // page subheading
+  --aipm-font-size-3xl: 22px;  // page heading
+  --aipm-font-size-4xl: 24px;  // H1
+
+  // ============================================================
+  // Typography — weight
+  // ============================================================
+  --aipm-font-weight-normal: 400;
+  --aipm-font-weight-medium: 500;
+  --aipm-font-weight-semibold: 600;
+  --aipm-font-weight-bold: 700;
+
+  // ============================================================
+  // Typography — line height
+  // ============================================================
+  --aipm-line-height-tight: 1.3;
+  --aipm-line-height-base: 1.5;
+  --aipm-line-height-loose: 1.7;
+
+  // ============================================================
+  // Semantic colors — brand + feedback
+  // ============================================================
+  --aipm-color-primary: #409eff;
+  --aipm-color-success: #67c23a;
+  --aipm-color-warning: #e6a23c;
+  --aipm-color-danger: #f56c6c;
+  --aipm-color-info: #909399;
+
+  // ============================================================
+  // Text colors (对齐 Element Plus 层级)
+  // ============================================================
+  --aipm-text-primary: #303133;    // H1/H2/body 主要
+  --aipm-text-regular: #606266;    // body 次要
+  --aipm-text-secondary: #909399;  // caption、meta
+  --aipm-text-placeholder: #c0c4cc;// disabled、timestamp
+
+  // ============================================================
+  // Border colors
+  // ============================================================
+  --aipm-border-base: #dcdfe6;
+  --aipm-border-light: #ebeef5;
+  --aipm-border-lighter: #f0f2f5;
+
+  // ============================================================
+  // Background/surface colors
+  // ============================================================
+  --aipm-bg-base: #ffffff;      // 页面根背景
+  --aipm-bg-surface: #ffffff;   // card 表面
+  --aipm-bg-subtle: #fafafa;    // 嵌套 card / sidebar
+  --aipm-bg-muted: #f5f7fa;     // input / 次级表面
+  --aipm-bg-page: #f0f2f5;      // 页面 fallback 背景
+
+  // ============================================================
+  // Tinted backgrounds (semantic + transparency)
+  // ============================================================
+  --aipm-bg-primary-soft: rgba(64, 158, 255, 0.1);
+  --aipm-bg-success-soft: rgba(103, 194, 58, 0.1);
+  --aipm-bg-warning-soft: rgba(230, 162, 60, 0.1);
+  --aipm-bg-danger-soft: rgba(245, 108, 108, 0.1);
+  --aipm-bg-info-soft: rgba(144, 147, 153, 0.1);
+
+  // ============================================================
+  // Tinted surfaces（用于 alerts / patterns / learnings card 背景）
+  // 这些是浅色背景，和 tint-soft 的半透明不同，tint-surface 是实色填充
+  // ============================================================
+  --aipm-surface-warning-tint: #fef6ec;
+  --aipm-surface-danger-tint: #fef0f0;
+  --aipm-surface-info-tint: #f4f4f5;
+  --aipm-surface-primary-tint: #f8faff;
+  --aipm-surface-success-tint: #f0fff5;
+
+  // ============================================================
+  // Hypothesis status colors
+  // ============================================================
+  --aipm-hypothesis-backlog: #909399;
+  --aipm-hypothesis-running: #409eff;
+  --aipm-hypothesis-won: #67c23a;
+  --aipm-hypothesis-lost: #f56c6c;
+  --aipm-hypothesis-flat: #909399;
+  --aipm-hypothesis-abandoned: #c0c4cc;
+}
+
+// ============================================================
+// Responsive utility classes (common patterns)
+// ============================================================
+
+.mobile-only {
+  @include tablet-up {
+    display: none !important;
+  }
+}
+
+.tablet-up {
+  @include mobile {
+    display: none !important;
+  }
+}
+
+.desktop-only {
+  @include mobile-tablet {
+    display: none !important;
+  }
+}
+
+// Grid shortcuts
+.responsive-grid {
+  display: grid;
+  gap: var(--aipm-spacing-md);
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+
+// Stack on mobile helper
+.responsive-flex-row {
+  display: flex;
+  gap: var(--aipm-spacing-md);
+
+  @include mobile {
+    flex-direction: column;
+    gap: var(--aipm-spacing-sm);
+  }
+}
+
+// ============================================================
+// Touch-friendly tweaks on mobile
+// ============================================================
+
+@include mobile {
+  // Make Element Plus buttons slightly larger on mobile (touch targets 44px)
+  .el-button {
+    min-height: 44px;
+  }
+
+  .el-input__inner {
+    min-height: 44px;
+  }
+}

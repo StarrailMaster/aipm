@@ -1,0 +1,88 @@
+# AIPM nginx 配置模板
+#
+# install.sh 会用 sed 替换下列占位符：
+#   __AIPM_PUBLIC_PORT__  对外端口（如 8080）
+#   __AIPM_SERVER_PORT__  后端内部端口（固定 3100）
+#   __AIPM_WEB_DIST__     前端构建产物绝对路径
+#
+# 处理 3 类请求：
+#   /api/*   → 反代到后端 Express
+#   /ws      → 反代到后端 WebSocket（带 Upgrade 头）
+#   其它     → 从 __AIPM_WEB_DIST__ 提供静态文件（SPA fallback 到 index.html）
+
+server {
+    listen __AIPM_PUBLIC_PORT__;
+    listen [::]:__AIPM_PUBLIC_PORT__;
+
+    server_name _;
+
+    # 日志单独一个文件，方便排查
+    access_log /var/log/nginx/aipm.access.log;
+    error_log  /var/log/nginx/aipm.error.log;
+
+    # 允许上传较大的请求体（导入 SOP / md 附件等场景）
+    client_max_body_size 20m;
+
+    # 前端静态资源根目录
+    root __AIPM_WEB_DIST__;
+    index index.html;
+
+    # gzip
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types
+        text/plain
+        text/css
+        text/javascript
+        application/javascript
+        application/json
+        application/xml+rss
+        application/x-font-ttf
+        image/svg+xml;
+
+    # ========== 后端 REST API ==========
+    location /api/ {
+        proxy_pass http://127.0.0.1:__AIPM_SERVER_PORT__;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # AI 生成类接口可能长达 2-3 分钟
+        proxy_connect_timeout 60s;
+        proxy_send_timeout    300s;
+        proxy_read_timeout    300s;
+
+        # 禁用 buffer，流式返回更快
+        proxy_buffering off;
+    }
+
+    # ========== WebSocket ==========
+    location /ws {
+        proxy_pass http://127.0.0.1:__AIPM_SERVER_PORT__;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+
+        # WebSocket 需要长连接超时
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    # ========== 静态资源缓存 ==========
+    location ~* \.(js|css|woff2?|ttf|eot|svg|png|jpe?g|gif|ico|webp)$ {
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # ========== SPA fallback ==========
+    # 任何未匹配的路径都返回 index.html，交给 Vue Router 处理
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

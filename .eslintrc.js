@@ -1,0 +1,20 @@
+module.exports = {
+  root: true,
+  env: {
+    node: true,
+    browser: true,
+    es2022: true,
+  },
+  parser: '@typescript-eslint/parser',
+  plugins: ['@typescript-eslint'],
+  extends: [
+    'eslint:recommended',
+    'plugin:@typescript-eslint/recommended',
+  ],
+  rules: {
+    '@typescript-eslint/no-explicit-any': 'warn',
+    '@typescript-eslint/explicit-function-return-type': 'off',
+    '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+  },
+  ignorePatterns: ['dist', 'node_modules', '*.js'],
+}

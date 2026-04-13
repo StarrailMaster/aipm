@@ -1,0 +1,29 @@
+{
+  "name": "aipm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-Native Project Management Platform",
+  "scripts": {
+    "dev": "concurrently --names server,web --prefix-colors cyan,green \"pnpm --filter @aipm/server dev\" \"pnpm --filter @aipm/web dev\"",
+    "build": "pnpm --filter @aipm/server build && pnpm --filter @aipm/web build",
+    "lint": "eslint . --ext .ts,.vue",
+    "typecheck": "npx tsc --noEmit"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "prisma",
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "vue-demi"
+    ]
+  }
+}

@@ -1,0 +1,63 @@
+// Responsive breakpoints for AIPM (G12 — Day 1 framework)
+//
+// 三档 breakpoint：
+//   - mobile:  < 768px  (手机，375px 代表设备)
+//   - tablet:  768-1279px
+//   - desktop: >= 1280px
+//
+// 用法：
+//   @use 'styles/breakpoints' as *;
+//
+//   .my-layout {
+//     padding: 24px;
+//     @include mobile {
+//       padding: 12px;
+//     }
+//     @include tablet {
+//       padding: 16px;
+//     }
+//   }
+//
+// 或用 between：
+//   @include responsive(500px, 900px) { ... }
+
+$mobile-max: 767px;
+$tablet-min: 768px;
+$tablet-max: 1279px;
+$desktop-min: 1280px;
+
+@mixin mobile {
+  @media (max-width: $mobile-max) {
+    @content;
+  }
+}
+
+@mixin tablet {
+  @media (min-width: $tablet-min) and (max-width: $tablet-max) {
+    @content;
+  }
+}
+
+@mixin tablet-up {
+  @media (min-width: $tablet-min) {
+    @content;
+  }
+}
+
+@mixin desktop {
+  @media (min-width: $desktop-min) {
+    @content;
+  }
+}
+
+@mixin mobile-tablet {
+  @media (max-width: $tablet-max) {
+    @content;
+  }
+}
+
+@mixin responsive($min, $max) {
+  @media (min-width: $min) and (max-width: $max) {
+    @content;
+  }
+}

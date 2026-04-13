@@ -1,0 +1,1040 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  ARCHITECT
+  ENGINEER
+  DESIGNER
+}
+
+enum IterationStatus {
+  SPEC
+  DESIGN
+  REFINE
+  IMPLEMENT
+  ACCEPT
+  DONE
+}
+
+model User {
+  id          String    @id @default(uuid())
+  email       String    @unique
+  password    String
+  name        String
+  role        Role      @default(DESIGNER)
+  avatar      String?
+  legacyRoles String[]
+  squadId     String?
+  squad       Squad?    @relation(fields: [squadId], references: [id], onDelete: SetNull)
+  /// G13 i18n: 用户偏好语言，"zh" | "en"
+  preferredLocale String @default("zh")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  // Org relations
+  ownedProjects Project[] @relation("ProjectOwner")
+
+  // SOP relations
+  sopProjects         SopProject[]         @relation("SopProjectCreator")
+  sopDocuments        SopDocument[]        @relation("SopDocumentCreator")
+  sopDocumentVersions SopDocumentVersion[] @relation("SopVersionCreator")
+
+  // Contribution points
+  contributionPoints ContributionPoint[] @relation("UserContributionPoints")
+
+  // Learning Copilot v2.0 relations
+  hypothesesOwned     Hypothesis[]         @relation("HypothesisOwner")
+  hypothesisTemplates HypothesisTemplate[] @relation("HypothesisTemplateAuthor")
+  learningsCreated    Learning[]           @relation("LearningAuthor")
+
+  @@map("users")
+}
+
+model Project {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  ownerId     String
+  owner       User      @relation("ProjectOwner", fields: [ownerId], references: [id])
+  squads      Squad[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@map("projects")
+}
+
+model Squad {
+  id        String   @id @default(uuid())
+  name      String
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id])
+  members   User[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("squads")
+}
+
+model Iteration {
+  id        String          @id @default(uuid())
+  projectId String
+  squadId   String
+  name      String
+  status    IterationStatus @default(SPEC)
+  boardId   String?         @unique
+  board     Board?          @relation(fields: [boardId], references: [id])
+
+  /// Learning Copilot v2.0: 关联的假设（iteration 降级为执行容器）
+  hypothesisId String?
+  hypothesis   Hypothesis? @relation("HypothesisIterations", fields: [hypothesisId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([hypothesisId])
+  @@map("iterations")
+}
+
+// ========== Prompt Library ==========
+
+enum PromptCategory {
+  DESIGN
+  FRONTEND
+  BACKEND
+  TESTING
+  INTEGRATION
+  OPTIMIZATION
+}
+
+enum Visibility {
+  private
+  team
+  public
+}
+
+enum PrStatus {
+  OPEN
+  MERGED
+  REJECTED
+}
+
+model Prompt {
+  id                String         @id @default(uuid())
+  name              String
+  description       String?
+  category          PromptCategory
+  tags              String[]
+  content           String
+  visibility        Visibility     @default(team)
+  starCount         Int            @default(0)
+  forkCount         Int            @default(0)
+  sourceId          String?
+  source            Prompt?        @relation("PromptForks", fields: [sourceId], references: [id])
+  forks             Prompt[]       @relation("PromptForks")
+  dependsOn         String[]
+  requiredSopLayers String[]
+  version           Int            @default(1)
+  createdById       String
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  deletedAt         DateTime?
+
+  versions            PromptVersion[]
+  stars               Star[]               @relation("PromptStars")
+  prs                 PromptPr[]
+  sopReferences       SopDocumentPrompt[]  @relation("SopPromptRefs")
+  experienceFeedbacks ExperienceFeedback[] @relation("ExperienceLinkedPrompt")
+  // Learning Copilot v2.0
+  linkedLearnings     Learning[]           @relation("LearningLinkedPrompt")
+
+  @@map("prompts")
+}
+
+model PromptVersion {
+  id          String   @id @default(uuid())
+  promptId    String
+  prompt      Prompt   @relation(fields: [promptId], references: [id])
+  version     Int
+  name        String
+  content     String
+  changelog   String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@map("prompt_versions")
+}
+
+model PromptPr {
+  id            String   @id @default(uuid())
+  promptId      String
+  prompt        Prompt   @relation(fields: [promptId], references: [id])
+  title         String
+  description   String
+  newContent    String
+  diff          String
+  status        PrStatus @default(OPEN)
+  submittedById String
+  reviewedById  String?
+  reviewComment String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("prompt_prs")
+}
+
+// ========== Skill Library ==========
+
+enum SkillCategory {
+  STAGE_HELPER
+  QUALITY_CHECK
+  GENERAL_TOOL
+}
+
+model Skill {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  category    SkillCategory
+  tags        String[]
+  content     String
+  gitRepoUrl  String?
+  visibility  Visibility    @default(team)
+  starCount   Int           @default(0)
+  forkCount   Int           @default(0)
+  sourceId    String?
+  source      Skill?        @relation("SkillForks", fields: [sourceId], references: [id])
+  forks       Skill[]       @relation("SkillForks")
+  createdById String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+
+  stars Star[] @relation("SkillStars")
+
+  @@map("skills")
+}
+
+// ========== Star (polymorphic) ==========
+
+model Star {
+  id         String   @id @default(uuid())
+  userId     String
+  targetType String // 'prompt' | 'skill'
+  promptId   String?
+  prompt     Prompt?  @relation("PromptStars", fields: [promptId], references: [id])
+  skillId    String?
+  skill      Skill?   @relation("SkillStars", fields: [skillId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, targetType, promptId])
+  @@unique([userId, targetType, skillId])
+  @@map("stars")
+}
+
+// ========== Fork record ==========
+
+model Fork {
+  id           String   @id @default(uuid())
+  userId       String
+  sourceType   String // 'prompt' | 'skill'
+  sourceId     String
+  forkedItemId String
+  createdAt    DateTime @default(now())
+
+  @@map("forks")
+}
+
+// ========== SOP 知识库 ==========
+
+enum SopLayer {
+  PRODUCT_REQ
+  CONTENT
+  DESIGN_SYSTEM
+  FRONTEND_ARCH
+  BACKEND_ARCH
+  AI_PROMPTS
+  ACCEPTANCE
+  APPENDIX
+}
+
+/// SOP 模板：共用的提示词组合，不再关联项目（Phase 6 Req 7）
+/// 一个 SopProject 是一个"项目模板"，里面分层放多份 SopDocument，
+/// 每份 SopDocument 引用一组有序的 Prompt —— 真正的内容在 Prompt 里。
+model SopProject {
+  id          String        @id @default(uuid())
+  name        String
+  version     String        @default("v1.0.0")
+  description String?
+  // projectId 字段已删除 —— SOP 是共用模板，不绑定具体项目
+  visibility  Visibility    @default(team)
+  createdById String
+  createdBy   User          @relation("SopProjectCreator", fields: [createdById], references: [id])
+  documents   SopDocument[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+
+  @@map("sop_projects")
+}
+
+/// SOP 文档：一个分类层级下的"提示词组合条目"
+/// 不再持有文字 content，而是引用一组 Prompt。description 字段替代原 content 作为简要说明。
+model SopDocument {
+  id           String               @id @default(uuid())
+  sopProjectId String
+  sopProject   SopProject           @relation(fields: [sopProjectId], references: [id])
+  layer        SopLayer
+  title        String
+  description  String? // 对此 SOP 条目的简要说明（原 content 角色）
+  version      Int                  @default(1)
+  tags         String[]
+  sortOrder    Int                  @default(0)
+  createdById  String
+  createdBy    User                 @relation("SopDocumentCreator", fields: [createdById], references: [id])
+  prompts      SopDocumentPrompt[] // Req 7: 有序引用的 Prompt 列表
+  versions     SopDocumentVersion[]
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  deletedAt    DateTime?
+
+  @@map("sop_documents")
+}
+
+/// SopDocument → Prompt 的引用关系（Req 7）
+/// 一个 SopDocument 里有多个 Prompt，按 sortOrder 排序，可选 note
+model SopDocumentPrompt {
+  id            String      @id @default(uuid())
+  sopDocumentId String
+  sopDocument   SopDocument @relation(fields: [sopDocumentId], references: [id], onDelete: Cascade)
+  promptId      String
+  prompt        Prompt      @relation("SopPromptRefs", fields: [promptId], references: [id])
+  sortOrder     Int         @default(0)
+  note          String? // 本 SOP 条目里对这个提示词的补充说明
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([sopDocumentId, sortOrder])
+  @@map("sop_document_prompts")
+}
+
+model SopDocumentVersion {
+  id          String      @id @default(uuid())
+  documentId  String
+  document    SopDocument @relation(fields: [documentId], references: [id])
+  version     Int
+  title       String
+  /// 旧字段：仍保留（历史版本中的 content 快照），新版本不再写入
+  content     String
+  tags        String[]
+  createdById String
+  createdBy   User        @relation("SopVersionCreator", fields: [createdById], references: [id])
+  createdAt   DateTime    @default(now())
+
+  @@map("sop_document_versions")
+}
+
+// ========== Board (collaborative whiteboard) ==========
+
+model Board {
+  id          String    @id @default(uuid())
+  projectId   String
+  name        String
+  description String?
+  createdById String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  selections       BoardSelection[]
+  layerAssignments BoardLayerAssignment[]
+  iteration        Iteration?
+
+  @@map("boards")
+}
+
+model BoardSelection {
+  id            String  @id @default(uuid())
+  boardId       String
+  board         Board   @relation(fields: [boardId], references: [id])
+  userId        String
+  type          String  @default("prompt") // prompt | sop_doc | text | sticky
+  promptId      String?
+  sopDocumentId String?
+  content       String? // text/sticky content
+  color         String? // sticky note color
+  size          Json? // {width, height}
+  position      Json // {x, y} coordinates on canvas
+  note          String?
+
+  // ===== 指派 + 完成状态（流程闭环必需） =====
+  assigneeId  String? // 当前有效指派人（可能是继承自 layer 负责人，也可能是手动覆盖）
+  completedAt DateTime? // 完成时间；null = 未完成，用于"我的任务"筛选
+
+  // ===== Layer 分类 + 继承语义（Phase 5.3 白板改 tab） =====
+  /// 卡片所属类型/tab。对应 8 个 SopLayer。null = 老数据或未归类（显示在"未分类"tab）
+  layer           SopLayer?
+  /// 指派继承模式：true = 跟随 layer 负责人（assigneeId 随 layer 负责人变动自动更新）
+  /// false = 手动覆盖（不再被 layer 负责人变动影响）
+  assigneeInherit Boolean   @default(true)
+
+  // ===== Phase 6 Req 1: 本地提示词修改 & 自建提示词卡片 =====
+  /// 用户在当前白板环节修改后的提示词标题。null = 沿用 prompt.name
+  promptOverrideTitle   String?
+  /// 用户修改后的提示词正文。null = 沿用 prompt.content
+  promptOverrideContent String?
+  /// 用户修改后的标签。空数组 = 沿用 prompt.tags
+  promptOverrideTags    String[]
+
+  activities BoardSelectionActivity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("board_selections")
+}
+
+/// 白板每个 layer 的负责人（Phase 5.3）
+///
+/// 一个白板下每个 layer 最多一条记录。layer 负责人决定所有"继承模式"卡片的 assigneeId。
+/// 改负责人时会批量 UPDATE 所有 assigneeInherit=true 的卡片。
+model BoardLayerAssignment {
+  id           String   @id @default(uuid())
+  boardId      String
+  board        Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  layer        SopLayer
+  assigneeId   String? // 可空：layer 还没指派负责人
+  /// 谁执行的指派动作（审计）
+  assignedById String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([boardId, layer])
+  @@map("board_layer_assignments")
+}
+
+// 白板卡片审计日志（Fix P2-8）
+// 记录所有指派 / 完成 / 撤回动作，便于追溯"谁在什么时候做了什么"
+model BoardSelectionActivity {
+  id          String         @id @default(uuid())
+  selectionId String
+  selection   BoardSelection @relation(fields: [selectionId], references: [id], onDelete: Cascade)
+  action      String // assign | unassign | reassign | complete | reopen
+  byId        String // 执行动作的用户 ID
+  fromUserId  String? // reassign 场景：之前的 assignee
+  toUserId    String? // assign/reassign 场景：新的 assignee
+  note        String?
+  createdAt   DateTime       @default(now())
+
+  @@index([selectionId, createdAt])
+  @@map("board_selection_activities")
+}
+
+// ========== 投喂包引擎 ==========
+
+enum FeedPhase {
+  DESIGN
+  IMPLEMENT
+}
+
+enum FeedStatus {
+  BLOCKED
+  PENDING
+  IN_PROGRESS
+  REVIEW
+  DONE
+  REWORK
+}
+
+model FeedPackage {
+  id          String     @id @default(uuid())
+  iterationId String
+  name        String
+  phase       FeedPhase
+  status      FeedStatus @default(PENDING)
+  promptId    String?
+  dependsOn   String[] // IDs of prerequisite packages
+  canParallel Boolean    @default(true)
+  assigneeId  String?
+  sortOrder   Int        @default(0)
+  thumbsUp    Int        @default(0)
+  thumbsDown  Int        @default(0)
+  createdById String
+
+  // ===== 设计审核流转（支持"工作台 → 推给设计 → 审核 → 推进"闭环） =====
+  designOutputRequired Boolean            @default(false) // 这一轮是否会产出设计图
+  figmaUrl             String? // 实施者产出的 Figma 文件地址
+  designReviewStatus   DesignReviewStatus @default(NOT_REQUIRED) // 设计审核状态
+  designReviewerId     String? // 指派给哪位设计师审核
+  designDraftId        String?            @unique // 关联自动创建的 DesignDraft（1:1）
+  designDraft          DesignDraft?       @relation("FeedDesignPush", fields: [designDraftId], references: [id])
+
+  files      FeedFile[]
+  executions ExecutionRecord[]
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  deletedAt  DateTime?
+
+  @@map("feed_packages")
+}
+
+model FeedFile {
+  id            String      @id @default(uuid())
+  feedPackageId String
+  feedPackage   FeedPackage @relation(fields: [feedPackageId], references: [id])
+  name          String
+  content       String
+  layer         String // 'core' | 'context'
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("feed_files")
+}
+
+model ExecutionRecord {
+  id            String      @id @default(uuid())
+  feedPackageId String
+  feedPackage   FeedPackage @relation(fields: [feedPackageId], references: [id])
+  executedById  String
+  aiTool        String
+  outputSummary String
+  issues        String?
+  executedAt    DateTime    @default(now())
+
+  @@map("execution_records")
+}
+
+// ========== Design Refinement ==========
+
+enum DesignStatus {
+  AI_GENERATED
+  PENDING_REFINE
+  REFINING
+  PENDING_CONFIRM // 手动任务：设计师做完，等创建人确认（流程闭环必需）
+  CONFIRMED
+  LOCKED
+}
+
+// 工作台包 → 设计审核 的审核状态
+enum DesignReviewStatus {
+  NOT_REQUIRED // 这一轮不产出设计图，不走审核
+  PENDING_REVIEW // 已推给设计师，等待审核
+  APPROVED // 设计师审核通过
+  REJECTED // 设计师驳回，需要重做
+}
+
+// DesignDraft 的来源
+enum DesignSourceType {
+  FEED_PUSH // 从工作台包推送过来的（有反向 FK 到 FeedPackage）
+  MANUAL // 设计师手动添加的
+}
+
+model DesignDraft {
+  id           String       @id @default(uuid())
+  iterationId  String
+  name         String
+  status       DesignStatus @default(AI_GENERATED)
+  figmaUrl     String?
+  thumbnailUrl String?
+  assigneeId   String?
+  changeLog    String?
+  lockedAt     DateTime?
+  lockedById   String?
+  createdById  String
+
+  // ===== 工作来源 + 创建人确认（支持双通道 + 手动任务闭环） =====
+  sourceType        DesignSourceType @default(MANUAL) // 来源：FEED_PUSH 还是手动添加
+  sourceFeedPackage FeedPackage?     @relation("FeedDesignPush") // 反向关系；FEED_PUSH 来源必填，MANUAL 为 null
+  confirmedAt       DateTime? // 创建人确认时间（手动任务专用）
+  confirmedById     String? // 创建人 ID
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  history DesignHistory[]
+
+  @@map("design_drafts")
+}
+
+model DesignHistory {
+  id          String       @id @default(uuid())
+  draftId     String
+  draft       DesignDraft  @relation(fields: [draftId], references: [id])
+  fromStatus  DesignStatus
+  toStatus    DesignStatus
+  changeLog   String?
+  changedById String
+  createdAt   DateTime     @default(now())
+
+  @@map("design_histories")
+}
+
+// ========== OKR ==========
+
+model Objective {
+  id          String      @id @default(uuid())
+  projectId   String
+  name        String
+  description String?
+  squadId     String?
+  keyResults  KeyResult[]
+  createdById String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime?
+
+  @@map("objectives")
+}
+
+model KeyResult {
+  id           String        @id @default(uuid())
+  objectiveId  String
+  objective    Objective     @relation(fields: [objectiveId], references: [id])
+  name         String
+  targetValue  Float
+  currentValue Float         @default(0)
+  /// G8: 基线值（开始时的起点，用于进度比率计算）
+  baseline     Float         @default(0)
+  unit         String
+
+  /// G8: 时间维度（可选，open-ended KR endDate=null）
+  startDate    DateTime      @default(now())
+  endDate      DateTime?
+
+  iterations   KrIteration[]
+  /// Learning Copilot v2.0: 反向关联
+  hypotheses   Hypothesis[]  @relation("KrHypotheses")
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([startDate, endDate])
+  @@map("key_results")
+}
+
+model KrIteration {
+  id           String    @id @default(uuid())
+  keyResultId  String
+  keyResult    KeyResult @relation(fields: [keyResultId], references: [id])
+  roundNumber  Int
+  changes      String
+  dataFeedback Float
+  isAchieved   Boolean   @default(false)
+  recordedById String
+  createdAt    DateTime  @default(now())
+
+  @@map("kr_iterations")
+}
+
+// ========== Experience / Feedback ==========
+
+enum FeedbackStatus {
+  SUBMITTED
+  AI_SUMMARIZED
+  AGENT_PROCESSED
+  PENDING_REVIEW
+  MERGED
+  REJECTED
+}
+
+model Feedback {
+  id              String         @id @default(uuid())
+  rawDescription  String
+  attachments     String[]
+  aiSummary       Json?
+  warehouseResult Json?
+  status          FeedbackStatus @default(SUBMITTED)
+  reviewedById    String?
+  reviewComment   String?
+  iterationId     String?
+  feedPackageId   String?
+  submittedById   String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+
+  @@map("feedbacks")
+}
+
+model SystemConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("system_configs")
+}
+
+// ========== Experience Feedback (Phase 6 Req 6) ==========
+//
+// 经验沉淀反馈表单，简化为 3 个字段：
+//   - problemDescription：问题描述（必填）
+//   - markdownContent/markdownFileName：可选的 .md 附件（文本直接存库）
+//   - linkedPromptId：可选的关联提示词
+
+model ExperienceFeedback {
+  id                 String    @id @default(uuid())
+  problemDescription String
+  markdownContent    String?
+  markdownFileName   String?
+  linkedPromptId     String?
+  linkedPrompt       Prompt?   @relation("ExperienceLinkedPrompt", fields: [linkedPromptId], references: [id])
+  createdById        String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+
+  @@index([createdById, createdAt])
+  @@map("experience_feedbacks")
+}
+
+// ========== Contribution Points (Phase 7) ==========
+
+enum PointCategory {
+  base
+  value
+}
+
+enum ContributionSourceType {
+  prompt
+  skill
+  sop_project
+  sop_document
+  prompt_pr
+  hypothesis    // Phase F: 胜出假设
+  learning      // Phase F: 高质量学习笔记
+}
+
+/// 贡献积分事件流水 —— 幂等发放，每条记录代表一次积分发放
+model ContributionPoint {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation("UserContributionPoints", fields: [userId], references: [id])
+
+  /// 幂等 key：唯一标识"这个事件是否已发过分"
+  /// 格式示例：
+  ///   create:prompt:<id>
+  ///   star_milestone_5:prompt:<id>
+  ///   pr_merged_submitter:prompt_pr:<prId>
+  ///   pr_merged_original:prompt_pr:<prId>
+  ///   first_used_in_workbench:prompt:<id>
+  ///   used_milestone_5:prompt:<id>
+  ///   first_used_in_iteration:sop_project:<id>
+  eventKey String @unique
+
+  eventType  String // 分类维度：create / star_milestone / fork_milestone / pr_merged / used_milestone 等
+  category   PointCategory // base / value
+  sourceType ContributionSourceType
+  sourceId   String
+  points     Int
+  reason     String // UI 展示文案，如 "F6·前端细节调优 获得第 5 颗星"
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([sourceType, sourceId])
+  @@map("contribution_points")
+}
+
+// ========================================================================
+// Learning Copilot v2.0 (PRD docs/prd-learning-copilot.md §5)
+// ========================================================================
+
+enum HypothesisStatus {
+  BACKLOG       // 待开始
+  RUNNING       // 跑中
+  CLOSED_WIN    // 胜出
+  CLOSED_LOSS   // 失败
+  CLOSED_FLAT   // 持平
+  ABANDONED     // 放弃
+}
+
+enum ResultConclusion {
+  WIN
+  LOSS
+  FLAT
+  INCONCLUSIVE
+}
+
+enum LearningSource {
+  HUMAN         // 用户手写（原 experience 数据）
+  AI_GENERATED  // AI Copilot 生成
+}
+
+enum VariantStatus {
+  CONTROL
+  TREATMENT
+}
+
+/// Hypothesis — Learning Copilot 的一等公民
+///
+/// 数据流：
+///   KeyResult → Hypothesis → [Variant[] 或 HypothesisResult] → Learning
+///                         ↑
+///                    iteration (执行容器) [可选]
+///
+/// 约束：
+///   - krId 必填（强制挂 OKR）
+///   - status ∈ CLOSED_* 时 closedAt 必须非空（DB CHECK 约束，migration SQL 加）
+///   - ICE/RICE score 由服务端计算，不接受客户端传值
+///   - 循环检测：parentId 链不能形成环，深度上限 20
+model Hypothesis {
+  id             String    @id @default(uuid())
+  krId           String
+  keyResult      KeyResult @relation("KrHypotheses", fields: [krId], references: [id])
+
+  /// 链式迭代 V1→V2→V3
+  parentId       String?
+  parent         Hypothesis?  @relation("HypothesisChain", fields: [parentId], references: [id], onDelete: SetNull)
+  children       Hypothesis[] @relation("HypothesisChain")
+
+  /// 假设内容
+  statement      String @db.Text
+  mechanism      String @db.Text
+  expectedImpact String
+  expectedImpactValue Float?
+  expectedImpactUnit  String?
+
+  status         HypothesisStatus @default(BACKLOG)
+
+  /// G6: 可选从模板创建
+  templateId     String?
+  template       HypothesisTemplate? @relation("TemplateHypotheses", fields: [templateId], references: [id], onDelete: SetNull)
+
+  /// G9: ICE 打分（可选）
+  iceImpact      Int?     // 1-10
+  iceConfidence  Int?     // 1-10
+  iceEase        Int?     // 1-10
+  iceScore       Float?   // 服务端计算 (impact * confidence * ease) / 10
+
+  /// G9: RICE 打分（可选）
+  riceReach      Int?
+  riceImpact     Float?   // 0.25/0.5/1/2/3
+  riceConfidence Int?     // 50/80/100
+  riceEffort     Float?
+  riceScore      Float?   // 服务端计算 (reach * impact * confidence) / effort
+
+  ownerId        String
+  owner          User     @relation("HypothesisOwner", fields: [ownerId], references: [id])
+
+  /// 关联执行
+  iterations     Iteration[]        @relation("HypothesisIterations")
+
+  /// 1:0..1 单变体场景的 result
+  result         HypothesisResult?
+
+  /// 1:N A/B 测试的 variants
+  variants       HypothesisVariant[]
+
+  /// 1:N 产出的 learnings（Copilot 生成 + 人工记录）
+  learnings      Learning[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  closedAt       DateTime?
+  deletedAt      DateTime?
+
+  @@index([krId, status])
+  @@index([ownerId, status])
+  @@index([closedAt])
+  @@index([iceScore])
+  @@index([riceScore])
+  @@index([deletedAt])
+  @@map("hypotheses")
+}
+
+/// HypothesisResult — 单变体场景的结果（1:1 with Hypothesis）
+///
+/// 约束：
+///   - delta 服务端计算 (actual - baseline)，不接受客户端传值
+///   - metricType 是 string（白名单校验，非 enum）——D25 决策
+model HypothesisResult {
+  id           String     @id @default(uuid())
+  hypothesisId String     @unique
+  hypothesis   Hypothesis @relation(fields: [hypothesisId], references: [id], onDelete: Cascade)
+
+  metricType   String     // 白名单：conversion_rate / count / ratio / revenue_cny / ...
+  metricName   String
+  baseline     Float
+  actual       Float
+  delta        Float      // 服务端计算
+  unit         String?
+
+  conclusion   ResultConclusion
+  humanNote    String?    @db.Text
+
+  createdAt    DateTime   @default(now())
+
+  @@map("hypothesis_results")
+}
+
+/// HypothesisTemplate — 假设模板库（G6）
+///
+/// 系统预置（isSystemDefault=true）不可删除；用户自建可编辑/删除。
+/// 模板内容用 {{placeholder}} 占位符，创建时由 placeholderValues 替换。
+model HypothesisTemplate {
+  id                 String  @id @default(uuid())
+  name               String
+  nameEn             String?
+  category           String  // acquisition / activation / retention / revenue / referral / custom
+  description        String  @db.Text
+  descriptionEn      String? @db.Text
+
+  statementTemplate  String  @db.Text
+  statementTemplateEn String? @db.Text
+  mechanismTemplate  String  @db.Text
+  mechanismTemplateEn String? @db.Text
+
+  suggestedMetricType String?
+  suggestedMetricName String?
+
+  /// placeholder 定义 JSON：
+  /// [{ key, label, labelEn?, required, type?, defaultValue?, enumOptions? }]
+  placeholders       Json
+
+  isSystemDefault    Boolean @default(false)
+  usageCount         Int     @default(0)
+
+  /// system default 时可为 null
+  createdById        String?
+  createdBy          User?   @relation("HypothesisTemplateAuthor", fields: [createdById], references: [id])
+
+  /// 反向关联
+  hypotheses         Hypothesis[] @relation("TemplateHypotheses")
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  deletedAt          DateTime?
+
+  @@index([category, isSystemDefault])
+  @@index([usageCount])
+  @@map("hypothesis_templates")
+}
+
+/// HypothesisVariant — A/B 测试变体（G7）
+///
+/// 约束：
+///   - 同一 hypothesis 的 variant name 唯一
+///   - 每个 hypothesis 至少要有一个 CONTROL
+///   - conversionRate / pValue / isSignificant / CI 服务端计算
+///   - 只能有一个 winner
+model HypothesisVariant {
+  id              String     @id @default(uuid())
+  hypothesisId    String
+  hypothesis      Hypothesis @relation(fields: [hypothesisId], references: [id], onDelete: Cascade)
+
+  name            String
+  description     String?    @db.Text
+  type            VariantStatus @default(TREATMENT)
+
+  /// 手填数据（用户 30 秒操作）
+  sampleSize      Int?
+  conversionCount Int?
+  metricValue     Float?
+  metricUnit      String?
+
+  /// 服务端自动计算（不接受客户端传值）
+  conversionRate           Float?
+  stdError                 Float?
+  pValue                   Float?
+  confidenceInterval95Low  Float?
+  confidenceInterval95High Float?
+  isSignificant            Boolean?
+  isWinner                 Boolean @default(false)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([hypothesisId, name])
+  @@index([hypothesisId, type])
+  @@map("hypothesis_variants")
+}
+
+/// Learning — 学习笔记（replaces experience_feedbacks）
+///
+/// expand-contract 迁移：
+///   Stage 1: 新建 learnings 表 + 数据复制；原 experience_feedbacks 保留 dual-write
+///   Stage 2: 一周后 drop experience_feedbacks
+///
+/// source 区分：
+///   HUMAN：用户手写的踩坑笔记（从 experience_feedbacks 迁移）
+///   AI_GENERATED：Copilot 在 hypothesis close 时生成
+model Learning {
+  id              String         @id @default(uuid())
+  source          LearningSource @default(HUMAN)
+
+  /// 可选关联 hypothesis（AI_GENERATED 一般有；HUMAN 一般无）
+  hypothesisId    String?
+  hypothesis      Hypothesis?    @relation(fields: [hypothesisId], references: [id], onDelete: SetNull)
+
+  title           String
+  content         String         @db.Text // Markdown 允许
+
+  /// 原 experience 字段（迁移保留）
+  linkedPromptId    String?
+  linkedPrompt      Prompt?      @relation("LearningLinkedPrompt", fields: [linkedPromptId], references: [id])
+  markdownContent   String?      @db.Text
+  markdownFileName  String?
+  problemDescription String?     @db.Text
+
+  createdById     String
+  createdBy       User           @relation("LearningAuthor", fields: [createdById], references: [id])
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
+
+  @@index([source, hypothesisId])
+  @@index([createdById, createdAt])
+  @@index([deletedAt])
+  @@map("learnings")
+}
+
+/// CopilotDigest — AI Copilot 生成的摘要缓存
+///
+/// scope 示例：
+///   "global"              : 全公司视图
+///   "project:<uuid>"      : 特定项目
+///   "kr:<uuid>"           : 特定 KR
+///
+/// payload JSON schema 见 contracts/api-copilot.ts CopilotPayload
+model CopilotDigest {
+  id          String   @id @default(uuid())
+  scope       String   // "global" | "project:{id}" | "kr:{id}"
+  triggerType String   // "scheduled_daily" | "hypothesis_close" | "manual"
+
+  /// 完整 JSON payload（前端直接渲染）
+  payload     Json
+
+  createdAt   DateTime @default(now())
+
+  @@index([scope, createdAt(sort: Desc)])
+  @@map("copilot_digests")
+}
+
+/// CopilotCostLog — Token 成本审计 + 预算保护（Issue 10）
+///
+/// 每次 Copilot 调用都写一条，便于 admin widget 聚合和月度 quota 检查。
+model CopilotCostLog {
+  id           String   @id @default(uuid())
+  triggerType  String   // scheduled_daily / hypothesis_close / manual
+  tokensIn     Int
+  tokensOut    Int
+  costUsd      Float
+  durationMs   Int
+  success      Boolean
+  errorMessage String?  @db.Text
+
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([triggerType, createdAt])
+  @@map("copilot_cost_logs")
+}
